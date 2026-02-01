@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+
 	"service2service_poc/models"
 	"service2service_poc/srv/commentapi"
 	"service2service_poc/srv/orderapi"
@@ -13,27 +14,23 @@ func main() {
 	commentService := commentapi.NewService()
 	orderService := orderapi.NewService()
 
-	// ---------- PHASE 2: write inter-service dependencies ----------
+	// ---------- PHASE 2: wire inter-service dependencies ----------
 	commentService.WithServices(orderService)
 	orderService.WithServices(commentService)
 
 	// ---------- PHASE 3: operational phase; run some tests ----------
 
-	// print pre-test order state
-	fmt.Printf("PRE-TEST ORDER\n%#v\n\n", orderService.GetOrder("order-1"))
+	// print orderService's pre-test state
+	fmt.Printf("PRE-TEST ORDER\n%#v\n\n", orderService.GetOrder("order-1")) // OUTPUT: models.Order{OrderId:"order-1", GlobalEntityId:"FP_SG", Status:"ACCEPTED"}
 
-	// runs some actions
-	commentService.WriteComment(models.Comment{ // also trigger order-api.GetOrder() to get some info
-		CommentId: "",
-		OrderId:   "order-1",
-		Text:      "Some manual comment test",
-	})
+	// runs some actions that trigger inter-service calls
+	commentService.WriteComment(models.Comment{OrderId: "order-1", Text: "Some manual comment test"}) // also triggers order-api.GetOrder() to retrieve some info
+	orderService.UpdateOrderStatus("order-1", "DELIVERED")                                            // also triggers comment-api.WriteComment()
 
-	orderService.UpdateOrderStatus("order-1", "DELIVERED") // also trigger comment-api.WriteComment
+	// print orderService's final state
+	fmt.Printf("FINAL ORDER\n%#v\n\n", orderService.GetOrder("order-1")) // OUTPUT: models.Order{OrderId:"order-1", GlobalEntityId:"FP_SG", Status:"DELIVERED"}
 
-	// print each services' state
-	fmt.Printf("FINAL ORDER\n%#v\n\n", orderService.GetOrder("order-1"))
-
+	// print commentService's final state
 	ps, _ := json.MarshalIndent(commentService.DB, "", "  ")
-	fmt.Printf("COMMENT DB's CONTENTS\n%s\n\n", ps)
+	fmt.Printf("COMMENT DB's CONTENTS\n%s\n\n", ps) // OUTPUT: (there will be 2 comments, one manual comment, and another made thru order-api)
 }
